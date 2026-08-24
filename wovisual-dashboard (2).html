@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WOVISUAL — Panel de control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCf14Nzf7mIqn1W6fgVYQ0-KQRaKlVPMwQ",
+    authDomain: "wovisual-panel.firebaseapp.com",
+    projectId: "wovisual-panel",
+    storageBucket: "wovisual-panel.firebasestorage.app",
+    messagingSenderId: "730019403671",
+    appId: "1:730019403671:web:fdd1931cf32759809156d2"
+  };
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  setPersistence(auth, browserLocalPersistence);
+  window.fb = { auth, db, signInWithEmailAndPassword, onAuthStateChanged, signOut, doc, getDoc, setDoc };
+</script>
+<style>
+:root{
+  --paper:#F7F7F5; --ink:#111114; --muted:#8A8A93; --line:#E3E3DF;
+  --blue:#1F2DE6; --blue-soft:#EAEBFE; --white:#FFFFFF;
+  --danger:#C22B2B;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;font-size:14px;line-height:1.5}
+h1,h2,h3{font-family:'Syne',sans-serif;letter-spacing:-0.02em}
+.mono{font-family:'IBM Plex Mono',monospace}
+
+/* ---------- Layout ---------- */
+header{padding:18px 20px 0}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand h1{font-size:22px;font-weight:800}
+.brand span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.14em}
+.ticker{margin-top:14px;border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:8px 0;display:flex;gap:28px;overflow-x:auto;white-space:nowrap;font-family:'IBM Plex Mono',monospace;font-size:12px}
+.ticker b{color:var(--blue);font-weight:500}
+.ticker .t-item{display:flex;gap:8px;align-items:baseline}
+.ticker .t-label{color:var(--muted);text-transform:uppercase;font-size:10px;letter-spacing:.1em}
+
+nav{display:flex;gap:4px;padding:14px 20px;overflow-x:auto}
+nav button{border:1px solid var(--line);background:var(--white);padding:9px 16px;border-radius:999px;font-family:'Inter',sans-serif;font-size:13px;font-weight:500;color:var(--ink);cursor:pointer;white-space:nowrap}
+nav button.active{background:var(--ink);color:var(--white);border-color:var(--ink)}
+nav button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+main{padding:6px 20px 90px;max-width:960px;margin:0 auto}
+section{display:none}
+section.visible{display:block}
+.card{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+.card h2{font-size:16px;margin-bottom:12px}
+.card h3{font-size:13px;margin-bottom:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:'Inter',sans-serif;font-weight:600}
+
+/* ---------- KPI ---------- */
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.kpi{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:14px}
+.kpi .num{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;letter-spacing:-0.03em}
+.kpi .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:2px}
+.kpi.blue{background:var(--blue);border-color:var(--blue);color:var(--white)}
+.kpi.blue .lbl{color:#C9CCFB}
+
+/* ---------- Forms ---------- */
+label{display:block;font-size:12px;font-weight:600;margin:10px 0 4px;color:var(--ink)}
+input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-family:'Inter',sans-serif;font-size:14px;background:var(--white);color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);outline-offset:-1px;border-color:var(--blue)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{display:inline-block;width:100%;margin-top:14px;padding:13px;border:none;border-radius:10px;background:var(--ink);color:var(--white);font-family:'Inter',sans-serif;font-size:14px;font-weight:600;cursor:pointer}
+.btn.blue{background:var(--blue)}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.btn-sm{padding:6px 10px;font-size:12px;border-radius:8px;border:1px solid var(--line);background:var(--white);cursor:pointer;font-family:'Inter',sans-serif}
+.btn-sm.del{color:var(--danger);border-color:#F0D5D5}
+
+/* ---------- Lists ---------- */
+.item{border-top:1px solid var(--line);padding:12px 0;display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.item:first-child{border-top:none}
+.item .main-line{font-weight:600;font-size:14px}
+.item .sub{font-size:12px;color:var(--muted);margin-top:2px}
+.item .amount{font-family:'IBM Plex Mono',monospace;font-size:14px;text-align:right;white-space:nowrap}
+.item .amount small{display:block;color:var(--muted);font-size:11px}
+.pill{display:inline-block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;padding:2px 8px;border-radius:999px;background:var(--blue-soft);color:var(--blue);font-weight:600;margin-left:6px;vertical-align:middle}
+.empty{color:var(--muted);font-size:13px;padding:14px 0;text-align:center}
+
+/* ---------- Result blocks ---------- */
+.result{background:var(--paper);border-radius:10px;padding:14px;margin-top:12px}
+.result .r-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px}
+.result .r-row.total{border-top:1px solid var(--line);margin-top:6px;padding-top:10px;font-weight:700;font-size:15px}
+.result .r-row .mono{font-size:13px}
+.note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
+
+/* ---------- Invoice preview / print ---------- */
+#invoice-preview{display:none}
+.inv-sheet{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:26px;margin-top:14px}
+.inv-sheet .inv-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:16px}
+.inv-sheet .inv-brand{font-family:'Syne',sans-serif;font-weight:800;font-size:20px}
+.inv-sheet .inv-num{font-family:'IBM Plex Mono',monospace;font-size:13px;text-align:right}
+.inv-sheet .inv-parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:12px;margin-bottom:18px}
+.inv-sheet .inv-parties h4{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:4px}
+.inv-sheet table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px}
+.inv-sheet th{text-align:left;border-bottom:1px solid var(--ink);padding:6px 4px;font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+.inv-sheet td{padding:8px 4px;border-bottom:1px solid var(--line)}
+.inv-sheet .num-col{text-align:right;font-family:'IBM Plex Mono',monospace}
+.inv-sheet .inv-totals{margin-left:auto;width:230px;font-size:13px}
+.inv-sheet .inv-totals .r-row{display:flex;justify-content:space-between;padding:3px 0}
+.inv-sheet .inv-totals .grand{border-top:2px solid var(--ink);margin-top:6px;padding-top:8px;font-weight:700;font-size:16px}
+.inv-sheet .inv-foot{margin-top:20px;font-size:11px;color:var(--muted);line-height:1.6}
+
+@media print{
+  body{background:var(--white)}
+  header,nav,main>*:not(#sec-facturas),#sec-facturas .card,#sec-facturas .no-print{display:none!important}
+  section{display:none!important}
+  #sec-facturas{display:block!important}
+  #invoice-preview{display:block!important}
+  .inv-sheet{border:none;border-radius:0;padding:0}
+  main{padding:0;max-width:100%}
+}
+@media(min-width:700px){
+  .kpis{grid-template-columns:repeat(4,1fr)}
+}
+
+/* ---------- Login gate ---------- */
+#login-screen{position:fixed;inset:0;background:var(--paper);display:flex;align-items:center;justify-content:center;z-index:999;padding:20px}
+#login-screen.hidden{display:none}
+.login-box{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:32px 28px;max-width:340px;width:100%;text-align:center}
+.login-box h1{font-size:22px;font-weight:800;margin-bottom:6px}
+.login-box p{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5}
+.login-box button{width:100%;padding:13px;border-radius:10px;border:1px solid var(--line);background:var(--white);font-family:'Inter',sans-serif;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px}
+.login-box .err{color:var(--danger);font-size:12px;margin-top:12px;display:none}
+#app-shell{display:none}
+#app-shell.visible{display:block}
+.top-user{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:6px 20px 0;font-size:12px;color:var(--muted)}
+.top-user button{background:none;border:none;color:var(--blue);font-size:12px;font-weight:600;cursor:pointer;padding:0}
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-box">
+    <h1>WOVISUAL</h1>
+    <p>Panel de control privado.</p>
+    <input type="email" id="login-email" placeholder="Email" autocomplete="username" style="margin-bottom:8px">
+    <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password">
+    <button id="login-btn" style="margin-top:12px;background:var(--blue);color:var(--white);border-color:var(--blue)">Entrar</button>
+    <div class="err" id="login-err"></div>
+  </div>
+</div>
+
+<div id="app-shell">
+
+<div class="top-user"><span id="user-email"></span><button id="logout-btn">Cerrar sesión</button></div>
+<header>
+  <div class="brand"><h1>WOVISUAL</h1><span>Panel de control</span></div>
+  <div class="ticker" id="ticker"></div>
+</header>
+
+<nav id="nav">
+  <button data-tab="resumen" class="active">Resumen</button>
+  <button data-tab="trabajos">Trabajos</button>
+  <button data-tab="gastos">Gastos</button>
+  <button data-tab="simulador">Simulador</button>
+  <button data-tab="facturas">Facturas</button>
+  <button data-tab="tarifas">Tarifas</button>
+</nav>
+
+<main>
+
+<!-- ============ RESUMEN ============ -->
+<section id="sec-resumen" class="visible">
+  <div class="kpis" id="kpis"></div>
+  <div class="card" style="margin-top:14px">
+    <h2>Por canal</h2>
+    <div id="canal-breakdown"></div>
+  </div>
+  <div class="card">
+    <h2>Últimos trabajos</h2>
+    <div id="recent-jobs"></div>
+  </div>
+</section>
+
+<!-- ============ TRABAJOS ============ -->
+<section id="sec-trabajos">
+  <div class="card">
+    <h2>Registrar trabajo</h2>
+    <label for="j-fecha">Fecha</label>
+    <input type="date" id="j-fecha">
+    <div class="row">
+      <div>
+        <label for="j-cliente">Cliente</label>
+        <input type="text" id="j-cliente" placeholder="Lola Casademunt S.L.">
+      </div>
+      <div>
+        <label for="j-canal">Canal</label>
+        <select id="j-canal"></select>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="j-producto">Producto</label>
+        <select id="j-producto"></select>
+      </div>
+      <div>
+        <label for="j-unidades">Unidades</label>
+        <input type="number" id="j-unidades" min="1" value="1">
+      </div>
+    </div>
+    <label for="j-precio">Precio unitario (€) — vacío = tarifa por defecto</label>
+    <input type="number" id="j-precio" step="0.01" placeholder="Tarifa del producto">
+    <div class="result" id="j-preview"></div>
+    <button class="btn blue" id="j-add">Guardar trabajo</button>
+  </div>
+  <div class="card">
+    <h2>Historial</h2>
+    <div id="jobs-list"></div>
+  </div>
+</section>
+
+<!-- ============ GASTOS ============ -->
+<section id="sec-gastos">
+  <div class="card">
+    <h2>Añadir gasto</h2>
+    <label for="g-fecha">Fecha</label>
+    <input type="date" id="g-fecha">
+    <div class="row">
+      <div>
+        <label for="g-concepto">Concepto</label>
+        <input type="text" id="g-concepto" placeholder="Higgsfield, cuota autónomo…">
+      </div>
+      <div>
+        <label for="g-importe">Importe (€)</label>
+        <input type="number" id="g-importe" step="0.01">
+      </div>
+    </div>
+    <label for="g-tipo">Tipo</label>
+    <select id="g-tipo">
+      <option value="puntual">Puntual</option>
+      <option value="recurrente">Recurrente mensual</option>
+    </select>
+    <button class="btn" id="g-add">Guardar gasto</button>
+  </div>
+  <div class="card">
+    <h2>Gastos registrados</h2>
+    <div id="expenses-list"></div>
+  </div>
+</section>
+
+<!-- ============ SIMULADOR ============ -->
+<section id="sec-simulador">
+  <div class="card">
+    <h2>Simular escenario</h2>
+    <div class="row">
+      <div>
+        <label for="s-producto">Producto</label>
+        <select id="s-producto"></select>
+      </div>
+      <div>
+        <label for="s-unidades">Unidades</label>
+        <input type="number" id="s-unidades" min="1" value="80">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="s-canal">Canal</label>
+        <select id="s-canal"></select>
+      </div>
+      <div>
+        <label for="s-precio">Precio unit. (€, opcional)</label>
+        <input type="number" id="s-precio" step="0.01" placeholder="Tarifa por defecto">
+      </div>
+    </div>
+    <div class="result" id="s-result"></div>
+    <p class="note">Útil para preparar la reunión de septiembre: mete el volumen que te propongan y verás al momento facturación, horas y neto.</p>
+  </div>
+</section>
+
+<!-- ============ FACTURAS ============ -->
+<section id="sec-facturas">
+  <div class="card no-print">
+    <h2>Generar borrador de factura</h2>
+    <div class="row">
+      <div>
+        <label for="f-numero">Nº factura</label>
+        <input type="text" id="f-numero">
+      </div>
+      <div>
+        <label for="f-fecha">Fecha</label>
+        <input type="date" id="f-fecha">
+      </div>
+    </div>
+    <label for="f-cliente">Cliente</label>
+    <input type="text" id="f-cliente" value="Lola Casademunt S.L.">
+    <div class="row">
+      <div>
+        <label for="f-cif">CIF/NIF cliente</label>
+        <input type="text" id="f-cif" value="B-58527680">
+      </div>
+      <div>
+        <label for="f-dircliente">Dirección cliente</label>
+        <input type="text" id="f-dircliente" value="Ctra. C-251 km 5,5, 08440 Cardedeu (Barcelona)">
+      </div>
+    </div>
+    <h3 style="margin-top:16px">Líneas</h3>
+    <div id="f-lineas"></div>
+    <button class="btn ghost" id="f-addline" style="margin-top:8px">+ Añadir línea</button>
+    <div class="result" id="f-totales"></div>
+    <button class="btn blue" id="f-generar">Ver borrador</button>
+    <button class="btn ghost" id="f-imprimir" style="display:none">Descargar / Imprimir PDF</button>
+    <button class="btn ghost" id="f-registrar" style="display:none">Registrar como emitida (avanza numeración)</button>
+    <p class="note">El borrador usa conceptos de producción visual (sin mencionar IA). Revísala antes de enviarla por mail. Al registrarla como emitida, el número siguiente se actualiza solo.</p>
+  </div>
+  <div id="invoice-preview"></div>
+  <div class="card no-print">
+    <h2>Facturas registradas</h2>
+    <div id="invoices-list"></div>
+  </div>
+</section>
+
+<!-- ============ TARIFAS ============ -->
+<section id="sec-tarifas">
+  <div class="card">
+    <h2>Productos y costes</h2>
+    <p class="note" style="margin:0 0 10px">Coste real = créditos por intento × intentos medios ÷ créditos por euro. Cambia un dato y todo el panel se recalcula.</p>
+    <div id="products-editor"></div>
+    <button class="btn ghost" id="p-add">+ Nuevo producto</button>
+  </div>
+  <div class="card">
+    <h2>Canales</h2>
+    <div id="channels-editor"></div>
+  </div>
+  <div class="card">
+    <h2>Parámetros generales</h2>
+    <div class="row">
+      <div>
+        <label for="cfg-creditseuro">Créditos por euro</label>
+        <input type="number" id="cfg-creditseuro" step="0.1">
+      </div>
+      <div>
+        <label for="cfg-nextinv">Próximo nº factura</label>
+        <input type="text" id="cfg-nextinv">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="cfg-iva">IVA %</label>
+        <input type="number" id="cfg-iva" step="1">
+      </div>
+      <div>
+        <label for="cfg-irpf">IRPF %</label>
+        <input type="number" id="cfg-irpf" step="1">
+      </div>
+    </div>
+    <h3 style="margin-top:16px">Tus datos de facturación</h3>
+    <label for="cfg-nombre">Nombre / razón social</label>
+    <input type="text" id="cfg-nombre">
+    <div class="row">
+      <div>
+        <label for="cfg-nif">NIF</label>
+        <input type="text" id="cfg-nif">
+      </div>
+      <div>
+        <label for="cfg-iban">IBAN de cobro</label>
+        <input type="text" id="cfg-iban">
+      </div>
+    </div>
+    <label for="cfg-direccion">Domicilio fiscal</label>
+    <input type="text" id="cfg-direccion">
+    <label for="cfg-email">Email</label>
+    <input type="text" id="cfg-email">
+    <button class="btn" id="cfg-save">Guardar configuración</button>
+  </div>
+  <div class="card" id="uid-box" style="display:none">
+    <h2>Tu identificador de usuario</h2>
+    <p class="note" style="margin:0 0 8px">Necesario para configurar las reglas de seguridad de la base de datos.</p>
+    <code class="mono" style="display:block;background:var(--paper);padding:10px;border-radius:8px;font-size:12px;word-break:break-all"></code>
+  </div>
+</section>
+
+</main>
+
+</div><!-- /#app-shell -->
+
+<script>
+/* ================= STATE ================= */
+const DOC_ID = 'main';
+let state = null;
+let currentUser = null;
+
+/* ================= AUTH ================= */
+document.getElementById('login-btn').addEventListener('click', doLogin);
+document.getElementById('login-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+async function doLogin(){
+  const err = document.getElementById('login-err');
+  err.style.display='none';
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  if(!email||!pass){ err.textContent='Introduce email y contraseña.'; err.style.display='block'; return; }
+  try{
+    await window.fb.signInWithEmailAndPassword(window.fb.auth, email, pass);
+  }catch(e){
+    console.error(e);
+    const c = e.code||'';
+    err.textContent = c.includes('invalid-credential')||c.includes('wrong-password')||c.includes('user-not-found')
+      ? 'Email o contraseña incorrectos.' : 'Error: '+(c||e.message);
+    err.style.display='block';
+  }
+}
+document.getElementById('logout-btn').addEventListener('click', ()=> window.fb.signOut(window.fb.auth));
+
+window.fb.onAuthStateChanged(window.fb.auth, async (user)=>{
+  if(user){
+    currentUser = user;
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app-shell').classList.add('visible');
+    document.getElementById('user-email').textContent = user.email;
+    const uidEl = document.getElementById('uid-box');
+    if(uidEl){ uidEl.style.display='block'; uidEl.querySelector('code').textContent = user.uid; }
+    await load();
+  } else {
+    currentUser = null;
+    document.getElementById('app-shell').classList.remove('visible');
+    document.getElementById('login-screen').classList.remove('hidden');
+  }
+});
+
+function defaults(){
+  return {
+    settings:{
+      creditsPerEuro:20, iva:21, irpf:7, nextInvoice:'2026-005',
+      nombre:'Pau (edítalo en Tarifas)', nif:'21784869M',
+      iban:'ES08 2100 2733 0501 0076 8855',
+      direccion:'Calle de la Granada, 33, 4-2, 08720 Vilafranca del Penedès (Barcelona)',
+      email:'wovisualagency@gmail.com'
+    },
+    products:[
+      {id:'p1', name:'Vídeo 8s single shot', price:27, credits:14, attempts:3.5, minutes:25},
+      {id:'p2', name:'Vídeo 8s multishot', price:32, credits:18, attempts:3.5, minutes:28},
+      {id:'p3', name:'Vídeo 12s single shot', price:33, credits:18, attempts:3.5, minutes:28},
+      {id:'p4', name:'Vídeo 12s multishot', price:37, credits:21, attempts:3.5, minutes:30},
+      {id:'p5', name:'Vídeo 6s realismo alto', price:30, credits:21, attempts:3.5, minutes:30},
+      {id:'p6', name:'Adaptación 12s → 8s', price:10, credits:4, attempts:1.5, minutes:10}
+    ],
+    channels:[
+      {id:'c1', name:'Directo (Lola / propio)', commission:0},
+      {id:'c2', name:'Canal amigo', commission:20},
+      {id:'c3', name:'THE AGNT', commission:0}
+    ],
+    jobs:[], expenses:[], invoices:[]
+  };
+}
+
+function docRef(){
+  return window.fb.doc(window.fb.db, 'users', currentUser.uid, 'panel', DOC_ID);
+}
+async function load(){
+  try{
+    const snap = await window.fb.getDoc(docRef());
+    state = snap.exists() ? snap.data() : defaults();
+    if(!snap.exists()) await save();
+  }catch(e){ console.error('Error cargando datos', e); state = defaults(); }
+  renderAll();
+}
+async function save(){
+  for(let i=0;i<3;i++){
+    try{
+      await window.fb.setDoc(docRef(), JSON.parse(JSON.stringify(state)));
+      return true;
+    }catch(e){ if(i===2) console.error('No se pudo guardar tras 3 intentos', e); }
+    await new Promise(res=>setTimeout(res, 400));
+  }
+  return false;
+}
+
+/* ================= HELPERS ================= */
+const eur = n => n.toLocaleString('es-ES',{minimumFractionDigits:2, maximumFractionDigits:2}) + ' €';
+const pct = n => n.toLocaleString('es-ES',{maximumFractionDigits:1}) + ' %';
+function unitCost(p){ return (p.credits * p.attempts) / state.settings.creditsPerEuro; }
+function findP(id){ return state.products.find(p=>p.id===id); }
+function findC(id){ return state.channels.find(c=>c.id===id); }
+function today(){ return new Date().toISOString().slice(0,10); }
+function esc(s){ const d=document.createElement('div'); d.textContent=s??''; return d.innerHTML; }
+
+function jobMetrics(job){
+  const p = findP(job.productId), c = findC(job.channelId);
+  const price = job.price ?? (p?p.price:0);
+  const cost = p ? unitCost(p) : 0;
+  const gross = price * job.units;
+  const commission = gross * ((c?c.commission:0)/100);
+  const totalCost = cost * job.units;
+  const net = gross - commission - totalCost;
+  const hours = p ? (p.minutes * job.units)/60 : 0;
+  return {gross, commission, totalCost, net, hours, margin: gross>0 ? net/gross*100 : 0};
+}
+
+/* ================= RENDER ================= */
+function renderAll(){
+  renderTicker(); renderKpis(); renderCanalBreakdown(); renderRecent();
+  renderJobForm(); renderJobs(); renderExpenses(); renderSim();
+  renderInvoiceForm(); renderInvoices(); renderProducts(); renderChannels(); renderConfig();
+}
+
+function totals(){
+  let gross=0, net=0, hours=0, commission=0, prodCost=0;
+  state.jobs.forEach(j=>{ const m=jobMetrics(j); gross+=m.gross; net+=m.net; hours+=m.hours; commission+=m.commission; prodCost+=m.totalCost; });
+  const exp = state.expenses.reduce((a,e)=>a+e.amount,0);
+  return {gross, net: net-exp, hours, commission, prodCost, exp, margin: gross>0 ? (net-exp)/gross*100 : 0, rawNet:net};
+}
+
+function renderTicker(){
+  const t = totals();
+  document.getElementById('ticker').innerHTML = `
+    <div class="t-item"><span class="t-label">Facturado</span><b>${eur(t.gross)}</b></div>
+    <div class="t-item"><span class="t-label">Neto</span><b>${eur(t.net)}</b></div>
+    <div class="t-item"><span class="t-label">Margen</span><b>${pct(t.margin)}</b></div>
+    <div class="t-item"><span class="t-label">Horas</span><b>${t.hours.toLocaleString('es-ES',{maximumFractionDigits:1})} h</b></div>
+    <div class="t-item"><span class="t-label">€/hora neto</span><b>${t.hours>0?eur(t.net/t.hours):'—'}</b></div>`;
+}
+
+function renderKpis(){
+  const t = totals();
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi blue"><div class="num">${eur(t.gross)}</div><div class="lbl">Facturado</div></div>
+    <div class="kpi"><div class="num">${eur(t.net)}</div><div class="lbl">Beneficio neto</div></div>
+    <div class="kpi"><div class="num">${pct(t.margin)}</div><div class="lbl">Margen real</div></div>
+    <div class="kpi"><div class="num">${t.hours>0?eur(t.net/t.hours):'—'}</div><div class="lbl">€ / hora neto</div></div>`;
+}
+
+function renderCanalBreakdown(){
+  const el = document.getElementById('canal-breakdown');
+  if(!state.jobs.length){ el.innerHTML = '<div class="empty">Sin trabajos todavía. Registra el primero en la pestaña Trabajos.</div>'; return; }
+  let html='';
+  state.channels.forEach(c=>{
+    const jobs = state.jobs.filter(j=>j.channelId===c.id);
+    if(!jobs.length) return;
+    let g=0,n=0; jobs.forEach(j=>{const m=jobMetrics(j); g+=m.gross; n+=m.net;});
+    html += `<div class="item"><div><div class="main-line">${esc(c.name)}</div>
+      <div class="sub">${jobs.length} trabajo(s) · comisión ${c.commission}%</div></div>
+      <div class="amount">${eur(g)}<small>neto ${eur(n)} · ${pct(g>0?n/g*100:0)}</small></div></div>`;
+  });
+  el.innerHTML = html || '<div class="empty">Sin trabajos todavía.</div>';
+}
+
+function renderRecent(){
+  const el = document.getElementById('recent-jobs');
+  const last = [...state.jobs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  el.innerHTML = last.length ? last.map(jobRow).join('') : '<div class="empty">Nada por aquí aún.</div>';
+}
+
+function jobRow(j, withDelete){
+  const p=findP(j.productId), c=findC(j.channelId), m=jobMetrics(j);
+  return `<div class="item"><div>
+    <div class="main-line">${esc(j.client)}<span class="pill">${esc(c?c.name.split(' ')[0]:'')}</span></div>
+    <div class="sub">${j.date} · ${j.units} × ${esc(p?p.name:'?')} @ ${eur(j.price ?? (p?p.price:0))}</div></div>
+    <div class="amount">${eur(m.gross)}<small>neto ${eur(m.net)} · ${pct(m.margin)}</small>
+    ${withDelete?`<button class="btn-sm del" onclick="delJob('${j.id}')" style="margin-top:6px">Borrar</button>`:''}</div></div>`;
+}
+
+/* ---------- Trabajos ---------- */
+function fillSelect(id, arr){
+  document.getElementById(id).innerHTML = arr.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
+}
+function renderJobForm(){
+  fillSelect('j-producto', state.products); fillSelect('j-canal', state.channels);
+  fillSelect('s-producto', state.products); fillSelect('s-canal', state.channels);
+  const f = document.getElementById('j-fecha'); if(!f.value) f.value = today();
+  updateJobPreview();
+}
+function updateJobPreview(){
+  const pid = document.getElementById('j-producto').value;
+  const cid = document.getElementById('j-canal').value;
+  const units = parseInt(document.getElementById('j-unidades').value)||0;
+  const priceInput = document.getElementById('j-precio').value;
+  const p = findP(pid);
+  if(!p||units<1){ document.getElementById('j-preview').innerHTML=''; return; }
+  const job = {productId:pid, channelId:cid, units, price: priceInput===''?null:parseFloat(priceInput)};
+  const m = jobMetrics(job);
+  document.getElementById('j-preview').innerHTML = `
+    <div class="r-row"><span>Facturación</span><span class="mono">${eur(m.gross)}</span></div>
+    <div class="r-row"><span>Comisión canal</span><span class="mono">−${eur(m.commission)}</span></div>
+    <div class="r-row"><span>Coste producción</span><span class="mono">−${eur(m.totalCost)}</span></div>
+    <div class="r-row"><span>Horas estimadas</span><span class="mono">${m.hours.toLocaleString('es-ES',{maximumFractionDigits:1})} h</span></div>
+    <div class="r-row total"><span>Neto (${pct(m.margin)})</span><span class="mono">${eur(m.net)}</span></div>`;
+}
+['j-producto','j-canal','j-unidades','j-precio'].forEach(id=>{
+  document.addEventListener('input', e=>{ if(e.target.id===id) updateJobPreview(); });
+});
+
+document.getElementById('j-add').addEventListener('click', async ()=>{
+  const client = document.getElementById('j-cliente').value.trim();
+  const units = parseInt(document.getElementById('j-unidades').value)||0;
+  if(!client || units<1){ alert('Falta cliente o unidades.'); return; }
+  const priceInput = document.getElementById('j-precio').value;
+  state.jobs.push({
+    id:'j'+Date.now(), date:document.getElementById('j-fecha').value||today(),
+    client, productId:document.getElementById('j-producto').value,
+    channelId:document.getElementById('j-canal').value, units,
+    price: priceInput===''?null:parseFloat(priceInput)
+  });
+  await save(); renderAll();
+  document.getElementById('j-cliente').value=''; document.getElementById('j-unidades').value=1; document.getElementById('j-precio').value='';
+});
+
+function renderJobs(){
+  const el = document.getElementById('jobs-list');
+  const list = [...state.jobs].sort((a,b)=>b.date.localeCompare(a.date));
+  el.innerHTML = list.length ? list.map(j=>jobRow(j,true)).join('') : '<div class="empty">Registra tu primer trabajo arriba.</div>';
+}
+window.delJob = async id=>{
+  if(!confirm('¿Borrar este trabajo?')) return;
+  state.jobs = state.jobs.filter(j=>j.id!==id); await save(); renderAll();
+};
+
+/* ---------- Gastos ---------- */
+document.getElementById('g-add').addEventListener('click', async ()=>{
+  const concept = document.getElementById('g-concepto').value.trim();
+  const amount = parseFloat(document.getElementById('g-importe').value);
+  if(!concept || !(amount>0)){ alert('Falta concepto o importe.'); return; }
+  state.expenses.push({id:'g'+Date.now(), date:document.getElementById('g-fecha').value||today(),
+    concept, amount, type:document.getElementById('g-tipo').value});
+  await save(); renderAll();
+  document.getElementById('g-concepto').value=''; document.getElementById('g-importe').value='';
+});
+function renderExpenses(){
+  const f = document.getElementById('g-fecha'); if(!f.value) f.value = today();
+  const el = document.getElementById('expenses-list');
+  const list = [...state.expenses].sort((a,b)=>b.date.localeCompare(a.date));
+  const total = list.reduce((a,e)=>a+e.amount,0);
+  el.innerHTML = (list.length?`<div class="item"><div class="main-line">Total gastado</div><div class="amount">${eur(total)}</div></div>`:'') +
+    (list.length ? list.map(e=>`<div class="item"><div>
+      <div class="main-line">${esc(e.concept)}${e.type==='recurrente'?'<span class="pill">Mensual</span>':''}</div>
+      <div class="sub">${e.date}</div></div>
+      <div class="amount">−${eur(e.amount)}<button class="btn-sm del" onclick="delExp('${e.id}')" style="margin-top:6px;display:block;margin-left:auto">Borrar</button></div></div>`).join('')
+    : '<div class="empty">Sin gastos registrados.</div>');
+}
+window.delExp = async id=>{
+  if(!confirm('¿Borrar este gasto?')) return;
+  state.expenses = state.expenses.filter(e=>e.id!==id); await save(); renderAll();
+};
+
+/* ---------- Simulador ---------- */
+function renderSim(){
+  const run = ()=>{
+    const p = findP(document.getElementById('s-producto').value);
+    const c = findC(document.getElementById('s-canal').value);
+    const units = parseInt(document.getElementById('s-unidades').value)||0;
+    const priceInput = document.getElementById('s-precio').value;
+    if(!p||!c||units<1){ document.getElementById('s-result').innerHTML=''; return; }
+    const price = priceInput===''?p.price:parseFloat(priceInput);
+    const gross = price*units, comm = gross*c.commission/100, cost = unitCost(p)*units;
+    const net = gross-comm-cost, hours = p.minutes*units/60;
+    document.getElementById('s-result').innerHTML = `
+      <div class="r-row"><span>Facturación</span><span class="mono">${eur(gross)}</span></div>
+      <div class="r-row"><span>Comisión (${c.commission}%)</span><span class="mono">−${eur(comm)}</span></div>
+      <div class="r-row"><span>Coste producción</span><span class="mono">−${eur(cost)}</span></div>
+      <div class="r-row"><span>Horas de trabajo</span><span class="mono">${hours.toLocaleString('es-ES',{maximumFractionDigits:1})} h (${(hours/4).toLocaleString('es-ES',{maximumFractionDigits:1})} días a 4 h)</span></div>
+      <div class="r-row total"><span>Neto (${pct(gross>0?net/gross*100:0)})</span><span class="mono">${eur(net)}</span></div>
+      <div class="r-row"><span>€ / hora neto</span><span class="mono">${hours>0?eur(net/hours):'—'}</span></div>`;
+  };
+  ['s-producto','s-canal','s-unidades','s-precio'].forEach(id=>{
+    document.getElementById(id).oninput = run;
+  });
+  run();
+}
+
+/* ---------- Facturas ---------- */
+let invLines = [{concept:'Producción audiovisual digital para e-commerce', units:1, price:37}];
+
+function renderInvoiceForm(){
+  const f = document.getElementById('f-fecha'); if(!f.value) f.value = today();
+  const n = document.getElementById('f-numero'); if(!n.value) n.value = state.settings.nextInvoice;
+  renderInvLines();
+}
+function renderInvLines(){
+  document.getElementById('f-lineas').innerHTML = invLines.map((l,i)=>`
+    <div style="border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px">
+      <label>Concepto</label>
+      <input type="text" value="${esc(l.concept)}" oninput="invLines[${i}].concept=this.value;invTotals()">
+      <div class="row">
+        <div><label>Unidades</label><input type="number" value="${l.units}" min="1" oninput="invLines[${i}].units=parseInt(this.value)||0;invTotals()"></div>
+        <div><label>Precio unit. (€)</label><input type="number" value="${l.price}" step="0.01" oninput="invLines[${i}].price=parseFloat(this.value)||0;invTotals()"></div>
+      </div>
+      ${invLines.length>1?`<button class="btn-sm del" style="margin-top:8px" onclick="invLines.splice(${i},1);renderInvLines()">Quitar línea</button>`:''}
+    </div>`).join('');
+  invTotals();
+}
+window.invLines = invLines;
+window.invTotals = function(){
+  const base = invLines.reduce((a,l)=>a+l.units*l.price,0);
+  const iva = base*state.settings.iva/100, irpf = base*state.settings.irpf/100;
+  document.getElementById('f-totales').innerHTML = `
+    <div class="r-row"><span>Base imponible</span><span class="mono">${eur(base)}</span></div>
+    <div class="r-row"><span>IVA ${state.settings.iva}%</span><span class="mono">+${eur(iva)}</span></div>
+    <div class="r-row"><span>IRPF ${state.settings.irpf}%</span><span class="mono">−${eur(irpf)}</span></div>
+    <div class="r-row total"><span>Total a cobrar</span><span class="mono">${eur(base+iva-irpf)}</span></div>`;
+};
+document.getElementById('f-addline').addEventListener('click', ()=>{
+  invLines.push({concept:'Producción visual para e-commerce', units:1, price:0}); renderInvLines();
+});
+
+function buildInvoiceHTML(){
+  const s = state.settings;
+  const num = document.getElementById('f-numero').value;
+  const fecha = document.getElementById('f-fecha').value;
+  const cliente = document.getElementById('f-cliente').value;
+  const cif = document.getElementById('f-cif').value;
+  const dir = document.getElementById('f-dircliente').value;
+  const base = invLines.reduce((a,l)=>a+l.units*l.price,0);
+  const iva = base*s.iva/100, irpf = base*s.irpf/100;
+  return `<div class="inv-sheet">
+    <div class="inv-head">
+      <div><div class="inv-brand">WOVISUAL</div><div style="font-size:11px;color:var(--muted)">Producción visual para e-commerce</div></div>
+      <div class="inv-num"><strong>FACTURA ${esc(num)}</strong><br>Fecha: ${fecha}</div>
+    </div>
+    <div class="inv-parties">
+      <div><h4>Emisor</h4>${esc(s.nombre)}<br>NIF: ${esc(s.nif)}<br>${esc(s.direccion)}<br>${esc(s.email)}</div>
+      <div><h4>Cliente</h4>${esc(cliente)}<br>CIF: ${esc(cif)}<br>${esc(dir)}</div>
+    </div>
+    <table>
+      <thead><tr><th>Concepto</th><th class="num-col">Uds.</th><th class="num-col">Precio</th><th class="num-col">Importe</th></tr></thead>
+      <tbody>${invLines.map(l=>`<tr><td>${esc(l.concept)}</td><td class="num-col">${l.units}</td><td class="num-col">${eur(l.price)}</td><td class="num-col">${eur(l.units*l.price)}</td></tr>`).join('')}</tbody>
+    </table>
+    <div class="inv-totals">
+      <div class="r-row"><span>Base imponible</span><span class="mono">${eur(base)}</span></div>
+      <div class="r-row"><span>IVA ${s.iva}%</span><span class="mono">${eur(iva)}</span></div>
+      <div class="r-row"><span>Retención IRPF ${s.irpf}%</span><span class="mono">−${eur(irpf)}</span></div>
+      <div class="r-row grand"><span>Total</span><span class="mono">${eur(base+iva-irpf)}</span></div>
+    </div>
+    <div class="inv-foot">Forma de pago: transferencia bancaria<br>IBAN: ${esc(s.iban)}<br>Factura sujeta a retención de IRPF conforme al art. 101 LIRPF.</div>
+  </div>`;
+}
+
+document.getElementById('f-generar').addEventListener('click', ()=>{
+  document.getElementById('invoice-preview').innerHTML = buildInvoiceHTML();
+  document.getElementById('invoice-preview').style.display='block';
+  document.getElementById('f-imprimir').style.display='block';
+  document.getElementById('f-registrar').style.display='block';
+});
+document.getElementById('f-imprimir').addEventListener('click', ()=>window.print());
+document.getElementById('f-registrar').addEventListener('click', async ()=>{
+  const num = document.getElementById('f-numero').value;
+  const base = invLines.reduce((a,l)=>a+l.units*l.price,0);
+  state.invoices.push({id:'i'+Date.now(), num, date:document.getElementById('f-fecha').value,
+    client:document.getElementById('f-cliente').value, base});
+  const m = num.match(/^(\d{4})-(\d+)$/);
+  if(m) state.settings.nextInvoice = m[1]+'-'+String(parseInt(m[2])+1).padStart(3,'0');
+  await save(); renderAll();
+  document.getElementById('f-numero').value = state.settings.nextInvoice;
+  alert('Factura registrada. Próximo número: '+state.settings.nextInvoice);
+});
+function renderInvoices(){
+  const el = document.getElementById('invoices-list');
+  const list = [...state.invoices].sort((a,b)=>b.num.localeCompare(a.num));
+  el.innerHTML = list.length ? list.map(i=>`<div class="item"><div>
+    <div class="main-line">${esc(i.num)}</div><div class="sub">${i.date} · ${esc(i.client)}</div></div>
+    <div class="amount">${eur(i.base)}<small>base imponible</small></div></div>`).join('')
+  : '<div class="empty">Ninguna factura registrada desde el panel.</div>';
+}
+
+/* ---------- Tarifas ---------- */
+function renderProducts(){
+  document.getElementById('products-editor').innerHTML = state.products.map((p,i)=>`
+    <div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px">
+      <label>Nombre</label>
+      <input type="text" value="${esc(p.name)}" oninput="state.products[${i}].name=this.value">
+      <div class="row">
+        <div><label>Precio (€)</label><input type="number" step="0.01" value="${p.price}" oninput="state.products[${i}].price=parseFloat(this.value)||0"></div>
+        <div><label>Min. por unidad</label><input type="number" value="${p.minutes}" oninput="state.products[${i}].minutes=parseFloat(this.value)||0"></div>
+      </div>
+      <div class="row">
+        <div><label>Créditos / intento</label><input type="number" step="0.1" value="${p.credits}" oninput="state.products[${i}].credits=parseFloat(this.value)||0"></div>
+        <div><label>Intentos medios</label><input type="number" step="0.1" value="${p.attempts}" oninput="state.products[${i}].attempts=parseFloat(this.value)||0"></div>
+      </div>
+      <div class="sub" style="margin-top:8px;font-family:'IBM Plex Mono',monospace">Coste real: ${eur(unitCost(p))} · Margen directo: ${pct(p.price>0?(p.price-unitCost(p))/p.price*100:0)}</div>
+      <button class="btn-sm del" style="margin-top:8px" onclick="delProduct('${p.id}')">Eliminar producto</button>
+    </div>`).join('');
+}
+window.delProduct = async id=>{
+  if(!confirm('¿Eliminar producto?')) return;
+  state.products = state.products.filter(p=>p.id!==id); await save(); renderAll();
+};
+document.getElementById('p-add').addEventListener('click', async ()=>{
+  state.products.push({id:'p'+Date.now(), name:'Nuevo producto', price:0, credits:0, attempts:1, minutes:0});
+  await save(); renderAll();
+  document.querySelector('[data-tab="tarifas"]').click();
+});
+
+function renderChannels(){
+  document.getElementById('channels-editor').innerHTML = state.channels.map((c,i)=>`
+    <div class="row" style="margin-bottom:8px">
+      <div><label>Canal</label><input type="text" value="${esc(c.name)}" oninput="state.channels[${i}].name=this.value"></div>
+      <div><label>Comisión %</label><input type="number" step="1" value="${c.commission}" oninput="state.channels[${i}].commission=parseFloat(this.value)||0"></div>
+    </div>`).join('');
+}
+
+function renderConfig(){
+  const s = state.settings;
+  document.getElementById('cfg-creditseuro').value = s.creditsPerEuro;
+  document.getElementById('cfg-nextinv').value = s.nextInvoice;
+  document.getElementById('cfg-iva').value = s.iva;
+  document.getElementById('cfg-irpf').value = s.irpf;
+  document.getElementById('cfg-nombre').value = s.nombre;
+  document.getElementById('cfg-nif').value = s.nif;
+  document.getElementById('cfg-iban').value = s.iban;
+  document.getElementById('cfg-direccion').value = s.direccion;
+  document.getElementById('cfg-email').value = s.email;
+}
+document.getElementById('cfg-save').addEventListener('click', async ()=>{
+  const s = state.settings;
+  s.creditsPerEuro = parseFloat(document.getElementById('cfg-creditseuro').value)||20;
+  s.nextInvoice = document.getElementById('cfg-nextinv').value;
+  s.iva = parseFloat(document.getElementById('cfg-iva').value)||21;
+  s.irpf = parseFloat(document.getElementById('cfg-irpf').value)||7;
+  s.nombre = document.getElementById('cfg-nombre').value;
+  s.nif = document.getElementById('cfg-nif').value;
+  s.iban = document.getElementById('cfg-iban').value;
+  s.direccion = document.getElementById('cfg-direccion').value;
+  s.email = document.getElementById('cfg-email').value;
+  await save(); renderAll();
+  alert('Configuración guardada.');
+});
+
+/* ---------- Nav ---------- */
+document.getElementById('nav').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.querySelectorAll('section').forEach(s=>s.classList.remove('visible'));
+  document.getElementById('sec-'+b.dataset.tab).classList.add('visible');
+});
+
+/* Persist edits made in Tarifas inputs on blur */
+document.addEventListener('focusout', e=>{
+  if(e.target.closest('#products-editor') || e.target.closest('#channels-editor')){ save(); renderTicker(); renderKpis(); }
+});
+</script>
+</body>
+</html>
