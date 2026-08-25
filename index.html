@@ -51,6 +51,13 @@ header{padding:14px 20px 0}
 .ticker .t-item{display:flex;gap:8px;align-items:baseline}
 .ticker .t-label{color:var(--muted);text-transform:uppercase;font-size:10px;letter-spacing:.08em;font-weight:600}
 
+.rangebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 20px 0;max-width:1000px;margin:0 auto}
+.rangebar select,.rangebar input{width:auto;padding:8px 12px;font-size:13px;border-radius:9px}
+.rangebar select{font-weight:600;min-width:170px}
+.rangebar .rb-custom{display:none;gap:8px;align-items:center}
+.rangebar .rb-custom.on{display:flex}
+.rangebar .rb-sep{color:var(--muted);font-size:12px}
+.rangebar .rb-info{font-size:12px;color:var(--muted);margin-left:auto;white-space:nowrap}
 nav{display:flex;gap:4px;padding:14px 20px;overflow-x:auto}
 nav button{border:1px solid var(--line);background:var(--white);padding:9px 16px;border-radius:999px;font-family:'Inter',sans-serif;font-size:13px;font-weight:500;color:var(--ink);cursor:pointer;white-space:nowrap}
 nav button.active{background:var(--ink);color:var(--white);border-color:var(--ink)}
@@ -160,7 +167,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);outline-of
   #invoice-preview{display:block!important;margin:0}
   .inv{box-shadow:none;border-radius:0;max-width:100%;padding:38px 40px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
-@media(min-width:700px){ .kpis{grid-template-columns:repeat(4,1fr)} }
+@media(min-width:700px){ .kpis{grid-template-columns:repeat(auto-fit,minmax(158px,1fr))} }
 </style>
 </head>
 <body>
@@ -182,6 +189,34 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);outline-of
   <div class="brand"><h1>WOVISUAL</h1><span>Panel de control</span></div>
   <div class="ticker" id="ticker"></div>
 </header>
+
+<div class="rangebar">
+  <select id="rb-preset" aria-label="Periodo">
+    <option value="all">Todo el histórico</option>
+    <option value="today">Hoy</option>
+    <option value="yesterday">Ayer</option>
+    <option value="7">Últimos 7 días</option>
+    <option value="15">Últimos 15 días</option>
+    <option value="30">Últimos 30 días</option>
+    <option value="90">Últimos 90 días</option>
+    <option value="365">Últimos 12 meses</option>
+    <option value="mtd">Este mes</option>
+    <option value="lastmonth">Mes pasado</option>
+    <option value="qtd">Este trimestre</option>
+    <option value="ytd">Este año</option>
+    <option value="custom">Personalizado…</option>
+  </select>
+  <select id="rb-basis" aria-label="Criterio de fecha" style="min-width:150px">
+    <option value="date">Por fecha de emisión</option>
+    <option value="paid">Por fecha de cobro</option>
+  </select>
+  <div class="rb-custom" id="rb-custom">
+    <input type="date" id="rb-from" aria-label="Desde">
+    <span class="rb-sep">a</span>
+    <input type="date" id="rb-to" aria-label="Hasta">
+  </div>
+  <span class="rb-info" id="rb-info"></span>
+</div>
 
 <nav id="nav">
   <button data-tab="resumen" class="active">Resumen</button>
@@ -207,8 +242,10 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);outline-of
       <div><label for="j-fecha">Fecha</label><input type="date" id="j-fecha"></div>
       <div><label for="j-canal">Canal</label><select id="j-canal"></select></div>
     </div>
-    <label for="j-cliente">Cliente</label>
-    <input type="text" id="j-cliente" placeholder="Lola Casademunt S.L.">
+    <div class="row">
+      <div><label for="j-cliente">Cliente</label><input type="text" id="j-cliente" placeholder="LOLA CASADEMUNT S.L."></div>
+      <div><label for="j-cobro">Fecha de cobro (vacío = pendiente)</label><input type="date" id="j-cobro"></div>
+    </div>
     <h3 style="margin-top:16px">Líneas del trabajo</h3>
     <div id="j-lineas"></div>
     <button class="btn ghost" id="j-addline">+ Añadir línea</button>
@@ -417,13 +454,16 @@ function defaults(){
       {id:'p10', name:'Eliminación de sombras',      price:5,  credits:0,   attempts:1,   minutes:4},
       {id:'p11', name:'Configuración Doofinder (h)', price:25, credits:0,   attempts:1,   minutes:60},
       {id:'p17', name:'Vídeo puntual (coste medio)', price:25, credits:18.4,attempts:3.5, minutes:30},
-      {id:'p13', name:'Trabajo puntual / otros',     price:0,  credits:0,   attempts:1,   minutes:0}
+      {id:'p13', name:'Trabajo puntual / otros',     price:0,  credits:0,   attempts:1,   minutes:0},
+      {id:'p18', name:'Vídeo 6s realismo alto (38 €)',price:38, credits:21,  attempts:3.5, minutes:30},
+      {id:'p19', name:'Pack vídeo + foto (50 €)',    price:50, credits:125.5,attempts:1,  minutes:40}
     ],
     channels:[
       {id:'c1', name:'Directo — Lola',   commission:0},
       {id:'c4', name:'Directo — Gisela', commission:0},
       {id:'c2', name:'Canal amigo',      commission:20},
-      {id:'c3', name:'THE AGNT',         commission:0}
+      {id:'c3', name:'THE AGNT',         commission:0},
+      {id:'c5', name:'Doofinder — Lola',  commission:0}
     ],
     clients:[
       {id:'cl1', name:'LOLA CASADEMUNT S.L.', cif:'B58527680', address:'Ctra. C-251, km 5,5\n08440 Cardedeu (Barcelona)', oc:'264000650'},
@@ -439,12 +479,47 @@ async function load(){
   try{
     const snap=await window.fb.getDoc(docRef());
     state = snap.exists() ? snap.data() : defaults();
-    const d=defaults();
-    if(!state.clients) state.clients=d.clients;
-    if(!state.settings.empresa) Object.assign(state.settings,{empresa:d.settings.empresa,web:d.settings.web});
-    if(!snap.exists()) await save();
+    let changed = migrate();
+    if(!state.settings.seeded2026v3){
+      applySeed();
+      // Completar fechas de cobro en trabajos del histórico ya existentes
+      SEED_JOBS.forEach(sj=>{
+        const ex=state.jobs.find(j=>j.id===sj.id);
+        if(ex && ex.paidDate===undefined) ex.paidDate = sj.paidDate||null;
+      });
+      // Los trabajos de Doofinder pasan a su propio canal
+      ['h006','h007'].forEach(id=>{
+        const ex=state.jobs.find(j=>j.id===id), sj=SEED_JOBS.find(j=>j.id===id);
+        if(ex && sj){ ex.channelId=sj.channelId; if(!ex.paidDate) ex.paidDate=sj.paidDate; }
+      });
+      state.settings.seeded2026v3 = true;
+      changed = true;
+    }
+    if(!snap.exists() || changed) await save();
   }catch(e){ console.error('Error cargando datos',e); state=defaults(); }
   renderAll();
+}
+
+/* Fusiona en el estado guardado cualquier producto, canal, cliente o ajuste
+   que exista en la configuracion por defecto y falte en la base de datos.
+   Nunca borra ni sobrescribe lo que el usuario haya editado. */
+function migrate(){
+  const d=defaults(); let changed=false;
+  if(!Array.isArray(state.products)) { state.products=[]; changed=true; }
+  if(!Array.isArray(state.channels)) { state.channels=[]; changed=true; }
+  if(!Array.isArray(state.jobs))     { state.jobs=[];     changed=true; }
+  if(!Array.isArray(state.expenses)) { state.expenses=[]; changed=true; }
+  if(!Array.isArray(state.invoices)) { state.invoices=[]; changed=true; }
+  if(!Array.isArray(state.clients))  { state.clients=[];  changed=true; }
+  if(!state.settings) { state.settings={}; changed=true; }
+
+  d.products.forEach(p=>{ if(!state.products.some(x=>x.id===p.id)){ state.products.push({...p}); changed=true; } });
+  d.channels.forEach(c=>{ if(!state.channels.some(x=>x.id===c.id)){ state.channels.push({...c}); changed=true; } });
+  d.clients.forEach(c=>{ if(!state.clients.some(x=>x.id===c.id)){ state.clients.push({...c}); changed=true; } });
+  Object.keys(d.settings).forEach(k=>{
+    if(state.settings[k]===undefined||state.settings[k]===null||state.settings[k]===''){ state.settings[k]=d.settings[k]; changed=true; }
+  });
+  return changed;
 }
 async function save(){
   for(let i=0;i<3;i++){
@@ -453,6 +528,73 @@ async function save(){
     await new Promise(r=>setTimeout(r,400));
   }
   return false;
+}
+
+/* ================= FILTRO DE FECHAS ================= */
+let filter={preset:'all', from:'', to:'', basis:'date'};
+function jobDate(j){ return filter.basis==='paid' ? (j.paidDate||null) : j.date; }
+const iso=d=>d.toISOString().slice(0,10);
+function computeRange(){
+  const now=new Date(); now.setHours(12,0,0,0);
+  const back=n=>{ const d=new Date(now); d.setDate(d.getDate()-n); return d; };
+  const p=filter.preset;
+  if(p==='all')       return {from:null,to:null,label:'Todo el histórico'};
+  if(p==='today')     return {from:iso(now),to:iso(now),label:'Hoy'};
+  if(p==='yesterday'){ const y=back(1); return {from:iso(y),to:iso(y),label:'Ayer'}; }
+  if(['7','15','30','90','365'].includes(p)){
+    const n=parseInt(p);
+    return {from:iso(back(n-1)), to:iso(now), label:n===365?'Últimos 12 meses':'Últimos '+n+' días'};
+  }
+  if(p==='mtd'){ const f=new Date(now.getFullYear(),now.getMonth(),1); return {from:iso(f),to:iso(now),label:'Este mes'}; }
+  if(p==='lastmonth'){
+    const f=new Date(now.getFullYear(),now.getMonth()-1,1);
+    const t=new Date(now.getFullYear(),now.getMonth(),0);
+    return {from:iso(f),to:iso(t),label:'Mes pasado'};
+  }
+  if(p==='qtd'){ const q=Math.floor(now.getMonth()/3)*3; const f=new Date(now.getFullYear(),q,1); return {from:iso(f),to:iso(now),label:'Este trimestre'}; }
+  if(p==='ytd'){ const f=new Date(now.getFullYear(),0,1); return {from:iso(f),to:iso(now),label:'Este año'}; }
+  if(p==='custom'){
+    const f=filter.from||null, t=filter.to||null;
+    const fmt=x=>x?x.split('-').reverse().join('/'):'…';
+    return {from:f,to:t,label:fmt(f)+' – '+fmt(t)};
+  }
+  return {from:null,to:null,label:''};
+}
+function inRange(dateStr){
+  const r=computeRange();
+  if(!dateStr) return true;
+  if(r.from && dateStr<r.from) return false;
+  if(r.to   && dateStr>r.to)   return false;
+  return true;
+}
+const fJobs     = ()=>state.jobs.filter(j=>{ const d=jobDate(j); return d ? inRange(d) : false; });
+const pendientes= ()=>state.jobs.filter(j=>!j.paidDate);
+const fExpenses = ()=>state.expenses.filter(e=>inRange(e.date));
+const fInvoices = ()=>state.invoices.filter(i=>inRange(i.date));
+
+function initRangeBar(){
+  const sel=document.getElementById('rb-preset');
+  const box=document.getElementById('rb-custom');
+  const from=document.getElementById('rb-from');
+  const to=document.getElementById('rb-to');
+  sel.addEventListener('change',()=>{
+    filter.preset=sel.value;
+    box.classList.toggle('on', sel.value==='custom');
+    if(sel.value==='custom'){
+      if(!from.value){ const d=new Date(); d.setMonth(d.getMonth()-1); from.value=iso(d); filter.from=from.value; }
+      if(!to.value){ to.value=iso(new Date()); filter.to=to.value; }
+    }
+    renderAll();
+  });
+  document.getElementById('rb-basis').addEventListener('change',e=>{ filter.basis=e.target.value; renderAll(); });
+  from.addEventListener('change',()=>{ filter.from=from.value; renderAll(); });
+  to.addEventListener('change',()=>{ filter.to=to.value; renderAll(); });
+}
+function renderRangeInfo(){
+  const r=computeRange();
+  const n=fJobs().length;
+  const b=filter.basis==='paid'?'cobro':'emisión';
+  document.getElementById('rb-info').textContent = r.label+' · '+n+' trabajo'+(n===1?'':'s')+' · por '+b;
 }
 
 /* ================= HELPERS ================= */
@@ -486,14 +628,14 @@ function jobMetrics(job){
 }
 function totals(){
   let gross=0,net=0,hours=0;
-  state.jobs.forEach(j=>{ const m=jobMetrics(j); gross+=m.gross; net+=m.net; hours+=m.hours; });
-  const exp=state.expenses.reduce((a,e)=>a+e.amount,0);
+  fJobs().forEach(j=>{ const m=jobMetrics(j); gross+=m.gross; net+=m.net; hours+=m.hours; });
+  const exp=fExpenses().reduce((a,e)=>a+e.amount,0);
   return {gross, net:net-exp, hours, exp, margin: gross>0?(net-exp)/gross*100:0};
 }
 
 /* ================= RENDER ================= */
 function renderAll(){
-  renderTicker(); renderKpis(); renderCanal(); renderRecent();
+  renderRangeInfo(); renderTicker(); renderKpis(); renderCanal(); renderRecent();
   renderJobForm(); renderJobs(); renderExpenses(); renderSim();
   renderInvoiceForm(); renderInvoices(); renderProducts(); renderChannels(); renderConfig();
 }
@@ -508,25 +650,28 @@ function renderTicker(){
 }
 function renderKpis(){
   const t=totals();
+  const pend=pendientes().reduce((a,j)=>a+jobMetrics(j).gross,0);
   document.getElementById('kpis').innerHTML=`
     <div class="kpi blue"><div class="num">${eur(t.gross)}</div><div class="lbl">Facturado</div></div>
     <div class="kpi"><div class="num">${eur(t.net)}</div><div class="lbl">Beneficio neto</div></div>
     <div class="kpi"><div class="num">${pct(t.margin)}</div><div class="lbl">Margen real</div></div>
-    <div class="kpi"><div class="num">${t.hours>0?eur(t.net/t.hours):'—'}</div><div class="lbl">€ / hora neto</div></div>`;
+    <div class="kpi"><div class="num">${t.hours>0?eur(t.net/t.hours):'—'}</div><div class="lbl">€ / hora neto</div></div>
+    <div class="kpi" style="border-color:#F0D9B5;background:#FFFBF3"><div class="num">${eur(pend)}</div><div class="lbl">Pendiente de cobro</div></div>`;
 }
 function renderCanal(){
   const el=document.getElementById('canal-breakdown');
-  if(!state.jobs.length){ el.innerHTML='<div class="empty">Sin trabajos todavía.</div>'; return; }
+  const base=fJobs();
+  if(!base.length){ el.innerHTML='<div class="empty">Sin trabajos en este periodo.</div>'; return; }
   let html='';
   state.channels.forEach(c=>{
-    const jobs=state.jobs.filter(j=>j.channelId===c.id);
+    const jobs=base.filter(j=>j.channelId===c.id);
     if(!jobs.length) return;
     let g=0,n=0,h=0; jobs.forEach(j=>{const m=jobMetrics(j); g+=m.gross; n+=m.net; h+=m.hours;});
     html+=`<div class="item"><div><div class="main-line">${esc(c.name)}</div>
       <div class="sub">${jobs.length} trabajo(s) · comisión ${c.commission}% · ${num(h)} h</div></div>
       <div class="amount">${eur(g)}<small>neto ${eur(n)} · ${pct(g>0?n/g*100:0)}</small></div></div>`;
   });
-  el.innerHTML=html||'<div class="empty">Sin trabajos todavía.</div>';
+  el.innerHTML=html||'<div class="empty">Sin trabajos en este periodo.</div>';
 }
 function jobRow(j,del){
   const c=findC(j.channelId), m=jobMetrics(j);
@@ -534,20 +679,36 @@ function jobRow(j,del){
     const p=findP(l.productId);
     return `${num(l.units)} × ${esc(p?p.name:'?')}`;
   }).join(' · ');
+  const estado = j.paidDate
+    ? `<span class="pill" style="background:#E4F6E8;color:#1E7A38">Cobrado ${j.paidDate.split('-').reverse().slice(0,2).join('/')}</span>`
+    : `<span class="pill" style="background:#FCEEDA;color:#9A6208">Pendiente</span>`;
   return `<div class="item"><div>
-    <div class="main-line">${esc(j.client)}<span class="pill">${esc(c?c.name.replace('Directo — ',''):'')}</span></div>
+    <div class="main-line">${esc(j.client)}<span class="pill">${esc(c?c.name.replace('Directo — ',''):'')}</span>${estado}</div>
     <div class="sub">${j.date} · ${desc}</div></div>
     <div class="amount">${eur(m.gross)}<small>neto ${eur(m.net)} · ${pct(m.margin)}</small>
-    ${del?`<button class="btn-sm del" onclick="delJob('${j.id}')" style="margin-top:6px">Borrar</button>`:''}</div></div>`;
+    ${del?`<div style="margin-top:6px;display:flex;gap:6px;justify-content:flex-end">
+      <button class="btn-sm" onclick="togglePaid('${j.id}')">${j.paidDate?'Marcar pendiente':'Marcar cobrado'}</button>
+      <button class="btn-sm del" onclick="delJob('${j.id}')">Borrar</button></div>`:''}</div></div>`;
 }
 function renderRecent(){
-  const last=[...state.jobs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
-  document.getElementById('recent-jobs').innerHTML= last.length? last.map(j=>jobRow(j,false)).join('') : '<div class="empty">Nada por aquí aún.</div>';
+  const last=[...fJobs()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  document.getElementById('recent-jobs').innerHTML= last.length? last.map(j=>jobRow(j,false)).join('') : '<div class="empty">Sin trabajos en este periodo.</div>';
 }
 function renderJobs(){
-  const list=[...state.jobs].sort((a,b)=>b.date.localeCompare(a.date));
-  document.getElementById('jobs-list').innerHTML= list.length? list.map(j=>jobRow(j,true)).join('') : '<div class="empty">Registra tu primer trabajo arriba.</div>';
+  const list=[...fJobs()].sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById('jobs-list').innerHTML= list.length? list.map(j=>jobRow(j,true)).join('') : '<div class="empty">Sin trabajos en este periodo.</div>';
 }
+window.togglePaid=async id=>{
+  const j=state.jobs.find(x=>x.id===id); if(!j) return;
+  if(j.paidDate){ j.paidDate=null; }
+  else{
+    const d=prompt('Fecha de cobro (AAAA-MM-DD):', today());
+    if(!d) return;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){ alert('Formato no válido.'); return; }
+    j.paidDate=d;
+  }
+  await save(); renderAll();
+};
 window.delJob=async id=>{ if(!confirm('¿Borrar este trabajo?'))return; state.jobs=state.jobs.filter(j=>j.id!==id); await save(); renderAll(); };
 
 /* ---------- Trabajos: líneas ---------- */
@@ -594,12 +755,14 @@ document.getElementById('j-add').addEventListener('click', async ()=>{
   if(!jLines.some(l=>l.units>0)){ alert('Alguna línea debe tener unidades.'); return; }
   state.jobs.push({
     id:'j'+Date.now(), date:document.getElementById('j-fecha').value||today(), client,
+    paidDate: document.getElementById('j-cobro').value || null,
     channelId:document.getElementById('j-canal').value,
     lines:jLines.filter(l=>l.units>0).map(l=>({productId:l.productId, units:l.units, price:l.price===''?null:l.price}))
   });
   await save(); 
   jLines.length=0; jLines.push({productId:'p4',units:1,price:''});
   document.getElementById('j-cliente').value='';
+  document.getElementById('j-cobro').value='';
   renderAll();
 });
 
@@ -614,7 +777,7 @@ document.getElementById('g-add').addEventListener('click', async ()=>{
 });
 function renderExpenses(){
   const f=document.getElementById('g-fecha'); if(!f.value) f.value=today();
-  const list=[...state.expenses].sort((a,b)=>b.date.localeCompare(a.date));
+  const list=[...fExpenses()].sort((a,b)=>b.date.localeCompare(a.date));
   const total=list.reduce((a,e)=>a+e.amount,0);
   document.getElementById('expenses-list').innerHTML=
     (list.length?`<div class="item"><div class="main-line">Total gastado</div><div class="amount">${eur(total)}</div></div>`:'')+
@@ -622,7 +785,7 @@ function renderExpenses(){
       <div class="main-line">${esc(e.concept)}${e.type==='recurrente'?'<span class="pill">Mensual</span>':''}</div>
       <div class="sub">${e.date}</div></div>
       <div class="amount">−${eur(e.amount)}<button class="btn-sm del" onclick="delExp('${e.id}')" style="margin-top:6px;display:block;margin-left:auto">Borrar</button></div></div>`).join('')
-    : '<div class="empty">Sin gastos registrados.</div>');
+    : '<div class="empty">Sin gastos en este periodo.</div>');
 }
 window.delExp=async id=>{ if(!confirm('¿Borrar este gasto?'))return; state.expenses=state.expenses.filter(e=>e.id!==id); await save(); renderAll(); };
 
@@ -801,14 +964,14 @@ document.getElementById('f-registrar').addEventListener('click', async ()=>{
   alert('Registrada. Próximo número: '+state.settings.nextInvoice);
 });
 function renderInvoices(){
-  const list=[...state.invoices].sort((a,b)=>b.num.localeCompare(a.num));
+  const list=[...fInvoices()].sort((a,b)=>b.num.localeCompare(a.num));
   const tot=list.reduce((a,i)=>a+i.base,0);
   document.getElementById('invoices-list').innerHTML=
     (list.length?`<div class="item"><div class="main-line">Base facturada total</div><div class="amount">${eur(tot)}</div></div>`:'')+
     (list.length? list.map(i=>`<div class="item"><div>
       <div class="main-line">${esc(i.num)}</div><div class="sub">${i.date} · ${esc(i.client)}</div></div>
       <div class="amount">${eur(i.base)}<small>base imponible</small></div></div>`).join('')
-    : '<div class="empty">Ninguna factura registrada.</div>');
+    : '<div class="empty">Sin facturas en este periodo.</div>');
 }
 
 /* ================= TARIFAS ================= */
@@ -869,20 +1032,23 @@ document.addEventListener('focusout',e=>{
 /* ================= HISTÓRICO 2026 ================= */
 const LOLA='LOLA CASADEMUNT S.L.', GIS='Diseño y Fantasía, S.L.';
 const SEED_JOBS=[
-  {id:'h001', date:'2026-03-04', client:LOLA, channelId:'c1', lines:[
+  {id:'h001', date:'2026-03-04', client:LOLA, channelId:'c1', paidDate:'2026-04-25', lines:[
     {productId:'p15',units:50,price:15},{productId:'p15',units:51,price:15},{productId:'p17',units:17,price:25}]},
-  {id:'h002', date:'2026-03-04', client:LOLA, channelId:'c1', lines:[{productId:'p15',units:216,price:12}]},
-  {id:'h003', date:'2026-04-29', client:LOLA, channelId:'c1', lines:[{productId:'p16',units:4,price:50}]},
-  {id:'h004', date:'2026-04-29', client:LOLA, channelId:'c1', lines:[{productId:'p15',units:345,price:10}]},
-  {id:'h005', date:'2026-07-22', client:GIS,  channelId:'c4', lines:[{productId:'p14',units:110,price:9}]},
-  {id:'h006', date:'2026-07-30', client:LOLA, channelId:'c1', lines:[{productId:'p11',units:19,price:25}]},
-  {id:'h007', date:'2026-08-12', client:LOLA, channelId:'c1', lines:[
+  {id:'h002', date:'2026-03-04', client:LOLA, channelId:'c1', paidDate:'2026-04-25', lines:[{productId:'p15',units:216,price:12}]},
+  {id:'h003', date:'2026-04-29', client:LOLA, channelId:'c1', paidDate:'2026-05-25', lines:[{productId:'p16',units:4,price:50}]},
+  {id:'h004', date:'2026-04-29', client:LOLA, channelId:'c1', paidDate:'2026-05-25', lines:[{productId:'p15',units:345,price:10}]},
+  {id:'h005', date:'2026-07-22', client:GIS,  channelId:'c4', paidDate:null, lines:[{productId:'p14',units:110,price:9}]},
+  {id:'h006', date:'2026-07-30', client:LOLA, channelId:'c5', paidDate:'2026-08-05', lines:[{productId:'p11',units:19,price:25}]},
+  {id:'h007', date:'2026-08-12', client:LOLA, channelId:'c5', paidDate:'2026-08-18', lines:[
     {productId:'p11',units:5.9667,price:25},{productId:'p13',units:1,price:22}]},
-  {id:'h008', date:'2026-08-12', client:LOLA, channelId:'c1', lines:[
+  {id:'h008', date:'2026-08-12', client:LOLA, channelId:'c1', paidDate:null, lines:[
     {productId:'p7',units:31,price:12},{productId:'p4',units:7,price:37},{productId:'p8',units:8,price:15}]},
-  {id:'h009', date:'2026-08-24', client:LOLA, channelId:'c1', lines:[
+  {id:'h009', date:'2026-08-24', client:LOLA, channelId:'c1', paidDate:null, lines:[
     {productId:'p7',units:48,price:12},{productId:'p4',units:12,price:37},{productId:'p8',units:13,price:15},
-    {productId:'p9',units:1,price:90},{productId:'p10',units:7,price:5}]}
+    {productId:'p9',units:1,price:90},{productId:'p10',units:7,price:5}]},
+  // Trabajo sin facturar aún
+  {id:'h010', date:'2026-08-25', client:LOLA, channelId:'c1', paidDate:null, lines:[
+    {productId:'p19',units:1,price:50},{productId:'p18',units:7,price:38}]}
 ];
 const SEED_INV=[
   {num:'2026-001',date:'2026-03-04',client:LOLA,base:1940},
@@ -895,15 +1061,19 @@ const SEED_INV=[
   {num:'2026-008',date:'2026-08-12',client:LOLA,base:751},
   {num:'2026-009',date:'2026-08-24',client:LOLA,base:1340}
 ];
-document.getElementById('seed-btn').addEventListener('click', async ()=>{
+function applySeed(){
   const jIds=new Set(state.jobs.map(j=>j.id));
   const iNums=new Set(state.invoices.map(i=>i.num));
   const nj=SEED_JOBS.filter(j=>!jIds.has(j.id));
   const ni=SEED_INV.filter(i=>!iNums.has(i.num)).map(i=>({id:'i'+i.num,...i}));
-  if(!nj.length&&!ni.length){ alert('El histórico ya estaba cargado.'); return; }
   state.jobs.push(...nj); state.invoices.push(...ni);
+  return {jobs:nj.length, invoices:ni.length};
+}
+document.getElementById('seed-btn').addEventListener('click', async ()=>{
+  const r=applySeed();
+  if(!r.jobs&&!r.invoices){ alert('El histórico ya estaba cargado.'); return; }
   const ok=await save(); renderAll();
-  alert(ok?`Cargado: ${nj.length} trabajos y ${ni.length} facturas.`:'Error al guardar.');
+  alert(ok?`Cargado: ${r.jobs} trabajos y ${r.invoices} facturas.`:'Error al guardar.');
 });
 
 /* ================= BACKUP ================= */
@@ -926,6 +1096,7 @@ document.getElementById('import-file').addEventListener('change', async e=>{
 });
 
 /* ================= NAV ================= */
+initRangeBar();
 document.getElementById('nav').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
   document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
