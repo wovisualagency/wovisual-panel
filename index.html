@@ -25,6 +25,7 @@
 
   setPersistence(auth, browserLocalPersistence);
   window.fb = { auth, db, signInWithEmailAndPassword, onAuthStateChanged, signOut, doc, getDoc, setDoc };
+  window.dispatchEvent(new Event('fb-ready'));
 </script>
 <style>
 :root{
@@ -414,6 +415,7 @@ async function doLogin(){
 }
 document.getElementById('logout-btn').addEventListener('click', ()=> window.fb.signOut(window.fb.auth));
 
+function initAuth(){
 window.fb.onAuthStateChanged(window.fb.auth, async (user)=>{
   if(user){
     currentUser = user;
@@ -429,6 +431,8 @@ window.fb.onAuthStateChanged(window.fb.auth, async (user)=>{
     document.getElementById('login-screen').classList.remove('hidden');
   }
 });
+}
+if(window.fb) initAuth(); else window.addEventListener('fb-ready', initAuth);
 
 function defaults(){
   return {
